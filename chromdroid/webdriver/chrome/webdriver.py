@@ -2,11 +2,11 @@ import os
 import json
 import html
 import base64
-from seledroid.webdriver.common.by import By
-from seledroid.webdriver.remote.command import Command
-from seledroid.webdriver.remote.web_element import WebElement
-from seledroid.webdriver.common.exception import NoSuchElementException, NoSuchPageSourceException
-from seledroid.webdriver.remote.remote_connection import RemoteConnection
+from chromdroid.webdriver.common.by import By
+from chromdroid.webdriver.remote.command import Command
+from chromdroid.webdriver.remote.web_element import WebElement
+from chromdroid.webdriver.common.exception import NoSuchElementException, NoSuchPageSourceException
+from chromdroid.webdriver.remote.remote_connection import RemoteConnection
 
 
 class WebDriver(RemoteConnection):
