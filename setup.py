@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name="seledroid",
+    name="chromdroid",
     version="1.0.0",
     description="simple python module to control browser but for android",
     author="tovanduy",
@@ -9,15 +9,15 @@ setup(
     url="https://github.com/tovanduy/chromdroid",
     python_requires="~=3.7",
     package_dir={
-                "seledroid": "seledroid",
-                "seledroid.webdriver": "seledroid/webdriver"
+                "chromdroid": "chromdroid",
+                "chromdroid.webdriver": "chromdroid/webdriver"
     },
     packages=[
-        "seledroid",
-        "seledroid.webdriver",
-        "seledroid.webdriver.chrome",
-        "seledroid.webdriver.remote",
-        "seledroid.webdriver.common"
+        "chromdroid",
+        "chromdroid.webdriver",
+        "chromdroid.webdriver.chrome",
+        "chromdroid.webdriver.remote",
+        "chromdroid.webdriver.common"
     ],
     include_package_data=True,
     install_requires=[""],
