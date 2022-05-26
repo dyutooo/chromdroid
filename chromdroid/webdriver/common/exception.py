@@ -1,11 +1,18 @@
 class WebDriverException(Exception):
-	pass
+    pass
+
 
 class NoSuchElementException(WebDriverException):
-	pass
+    pass
+
 
 class NoSuchPageSourceException(WebDriverException):
-	pass
+    pass
+
 
 class InvalidElementStateException(WebDriverException):
-	pass
+    pass
+
+
+class ApplicationClosed(WebDriverException):
+    pass

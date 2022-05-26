@@ -1,37 +1,41 @@
 import os
 import json
+import time
 import html
 import base64
+
+from chromdroid.webdriver.common import utils
 from chromdroid.webdriver.common.by import By
 from chromdroid.webdriver.remote.command import Command
 from chromdroid.webdriver.remote.web_element import WebElement
-from chromdroid.webdriver.common.exception import NoSuchElementException, NoSuchPageSourceException
+from chromdroid.webdriver.common.exception import NoSuchElementException, NoSuchPageSourceException, ApplicationClosed
 from chromdroid.webdriver.remote.remote_connection import RemoteConnection
 
 
 class WebDriver(RemoteConnection):
 
-    def __init__(self, gui=True, accept_time_out=60, recv_time_out=60):
+    def __init__(self, gui=True, accept_time_out=60, recv_time_out=60*60):
         super(WebDriver, self).__init__(accept_time_out=accept_time_out)
         self.encode_req = lambda data, encode=True: (
-            "%s\n" % data).encode() if encode else "%s\n" % data
+            "%s\n" % utils.DictMap(data)).encode() if encode else "%s\n" % data
         self.gui = gui
-        self.dataStartSocket = self.encode_req({
+        self.shut_up = False
+        data = self.encode_req({
             "command": Command.INIT,
             "host": self.host,
             "port": self.port
         }, False)
         if self.gui:
             os.system(self.command(
-                "start", "com.luanon.chromium/com.luanon.chromium.MainActivity", self.dataStartSocket))
+                "start", "com.luanon.chromium/.MainActivity", data))
         else:
             os.system(self.command("startservice",
-                      "com.luanon.chromium/.MainService", self.dataStartSocket))
+                      "com.luanon.chromium/.MainService", data))
         try:
             self.client_accept = self.accept()[0]
             self.client_accept.settimeout(recv_time_out)
         except TimeoutError:
-            self.exception(TimeoutError, "Could not connect chrome webdriver")
+            utils.exception(TimeoutError, "Could not connect chrome webdriver")
 
     def __enter__(self):
         return self
@@ -42,110 +46,66 @@ class WebDriver(RemoteConnection):
     #----------utils----------#
 
     def command(self, action, name, data=""):
-        # adb shell am start -n "com.luanon.chromium/com.luanon.chromium.MainActivity" -d "{'command': 'init', 'host': '127.0.0.1', 'port': 5000}"
-        #  > /dev/null
         return "am %s -n %s -d '%s' > /dev/null" % (action, name, data)
 
     def check_result(self, commnad, recv):
-        try:
-            data = json.loads(recv)
-        except:
-            return {'result': None}
-        if commnad == data.get("command", None):
-            if 'encode' in data:
-                result = base64.b64decode(data.get("result", None)).decode()
-            else:
-                result = data.get("result", None)
-            if result:
-                result = " ".join(result.split())  # remove \t \n characters
-                try:
-                    return {**data, **{"result": eval(result)}}
-                except Exception:
-                    if result == "null" or result == "undefined":
-                        return {**data, **{"result": None}}
-                    elif result == "true" or result == "false":
-                        return {**data, **{"result": eval(result.capitalize())}}
-                    else:
-                        return {**data, **{"result": result}}
-            else:  # empty or None or ?
-                return {**data, **{"result": None}}
-
-    def decode(self, data):
-        try:
-            return html.unescape(data.decode("unicode-escape").encode("latin1").decode("utf8"))
-        except Exception:
-            try:
-                return data.decode("unicode-escape").encode("latin1").decode("utf8")
-            except Exception:
-                return data
-
-    def exception(self, type_, msg=""):
-        print("< %s :: %s >" % (type_.__name__, msg))
-        exit()
+        #print("\033[1;32m%s\033[1;0m" %recv)
+        data = utils.DictMap(json.loads(recv), "no_encode_again")
+        #print("\033[1;33m%s\033[1;0m" %data)
+        if commnad == data.command:
+            return data
 
     def execute(self, command, **kwargs):
         data = self.encode_req({
             "command": command,
             **kwargs
         })
-        try:
-            self.client_accept.send(data)
-        except:
-            print('DISCONNECT VỚI APP, VUI LÒNG TẮT APP ĐI VÀ CHẠY LẠI TOOL')
-            exit(0)
-            return {'result': None}
+        self.client_accept.send(data)
         recv = self.recv_all()
-        if recv == 'continue':
-            return {'result': None}
         return self.check_result(command, recv)
 
     def recv_all(self):
         """
-            byte or string faster?
-            byte faster 0.2 - 1 second
+                byte or string faster?
+                byte faster 0.2 - 1 second
         """
         result = b""
         length = b""
-        try:
-            while True:
+        while True:
+            try:
                 data = self.client_accept.recv(1)
-                if not data.decode().isdigit():
-                    result += data
-                    break
-                length += data
+            except Exception:
+                utils.exception(TimeoutError, "Time out to receive data")
+            if not data.decode().isdigit():
+                result += data
+                break
+            length += data
+        try:
             length = int(length.decode())
-        except Exception as e:
-            s = repr(e)
-            if 'invalid literal for int() with base' in s:
-                # os.system(self.command(
-                #     "start", "com.luanon.chromium/com.luanon.chromium.MainActivity", self.dataStartSocket))
-                print(
-                    'DISCONNECT VỚI APP CHROMIUM, VUI LÒNG TẮT APP ĐI VÀ CHẠY LẠI TOOL')
-                exit(0)
-                return 'continue'
-            length = 0
-        if length == 0:
-            # os.system(self.command(
-            #     "start", "com.luanon.chromium/com.luanon.chromium.MainActivity", self.dataStartSocket))
-            print('DISCONNECT VỚI APP CHROMIUM, VUI LÒNG TẮT APP ĐI VÀ CHẠY LẠI TOOL')
-            exit(0)
-            return 'continue'
-
+        except Exception:
+            utils.exception(ApplicationClosed,
+                            "Please close me by driver.close() conmand")
         while len(result) < length:
             result += self.client_accept.recv(self.max_recv)
-        return self.decode(result)
+        return utils.decode_data(result)
 
     #----------function----------#
 
     def close(self):
-        return self.execute(Command.CLOSE)["result"]
+        return self.execute(Command.CLOSE).result
 
     @property
     def current_url(self):
-        return self.execute(Command.CURRENT_URL)["result"]
+        return self.execute(Command.CURRENT_URL).result
+
+    def clear_cookie(self, name, url=""):
+        return self.execute(Command.CLEAR_COOKIE, request=url, keys=name).result
+
+    def clear_cookies(self):
+        return self.execute(Command.CLEAR_COOKIES).result
 
     def execute_script(self, script):
-        return self.execute(Command.EXECUTE_SCRIPT, script=script)["result"]
+        return self.execute(Command.EXECUTE_SCRIPT, script=script).result
 
     def find_element_by_id(self, id_):
         return self.find_element(by=By.ID, value=id_)
@@ -195,39 +155,63 @@ class WebDriver(RemoteConnection):
     def find_elements_by_css_selector(self, css_selector):
         return self.find_elements(by=By.CSS_SELECTOR, value=css_selector)
 
-    def find_element(self, by, value):
-        element = self.execute(Command.FIND_ELEMENT, by=by, value=value)
-        if not element["result"]:
+    def find_element(self, by, value, command=""):
+        if command:
+            element = self.execute(Command.FIND_ELEMENT,
+                                   request=command, by=by, value=value)
+        else:
+            element = self.execute(Command.FIND_ELEMENT, by=by, value=value)
+        if not element.result:
             return None
         return WebElement(self.execute, element)
 
     def find_elements(self, by, value):
         elements = self.execute(Command.FIND_ELEMENTS, by=by, value=value)
         result = []
-        for element in elements["result"]:
-            data = {**elements, **{"command": Command.FIND_ELEMENT, "element_path": "%s[%s]" % (
-                elements["element_path"], element[0]), "result": element[1]}}
+        for element in elements.result:
+            data = utils.DictMap(elements)  # copy
+            data.command = Command.FIND_ELEMENT
+            data.element_path = "%s[%s]" % (elements.element_path, element[0])
+            data.result = element[1]
             result.append(WebElement(self.execute, data))
         return result
 
     def get(self, url):
-        return self.execute(Command.GET, url=url)["result"]
+        return self.execute(Command.GET, url=url).result
+
+    def get_cookie(self, name, url=""):
+        return self.execute(Command.GET_COOKIE, request=url, keys=name).result
+
+    def get_cookies(self, url=""):
+        return self.execute(Command.GET_COOKIES, request=url).result
+
+    def implicitly_wait(self, delay):
+        time.sleep(delay)
 
     @property
     def page_source(self):
-        page_source = self.execute(Command.PAGE_SOURCE)
+        page_source = self.execute(Command.PAGE_SOURCE).result
         if not page_source:
-            self.exception(NoSuchPageSourceException,
-                           "If you get this error please report me on github")
-        # its base64 so decode later
-        return page_source['result']
+            utils.exception(NoSuchPageSourceException,
+                            "If you get this error please report me on github", self.shut_up)
+        return page_source
+
+    def swipe_down(self):
+        return self.execute(Command.SWIPE_DOWN).result
+
+    def swipe_up(self):
+        return self.execute(Command.SWIPE_UP).result
+
+    def set_cookie(self, name, value, url=""):
+        return self.execute(Command.SET_COOKIE, request=url, keys=name, value=value).result
+
+    def set_user_agent(self, user_agent):
+        return self.execute(Command.SET_USER_AGENT, keys=user_agent).result
+
+    def set_proxy(self, host, port):
+        proxy = host + ":" + str(port)
+        return self.execute(Command.SET_PROXY, keys=proxy).result
 
     @property
     def title(self):
-        return self.execute(Command.TITLE)["result"]
-
-    def get_cookie(self, name, domain: str or None = ""):
-        return self.execute(Command.GET_COOKIE, domain=domain, keys=name)["result"]
-
-    def setCookie(self, name, value, domain: str or None = ""):
-        return self.execute(Command.SET_COOKIE, domain=domain, keys=name, value=value)["result"]
+        return self.execute(Command.TITLE).result

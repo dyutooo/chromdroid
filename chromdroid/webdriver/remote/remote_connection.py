@@ -3,7 +3,7 @@ import socket
 
 class RemoteConnection(socket.socket):
 
-    def __init__(self, accept_time_out=60):
+    def __init__(self, accept_time_out):
         socket.setdefaulttimeout(accept_time_out)
         super(RemoteConnection, self).__init__(
             socket.AF_INET, socket.SOCK_STREAM)
